@@ -13,7 +13,7 @@
 ###
 
 <div align="center">
-  <img height="600" src="https://i.ibb.co/ryXzKD0/example.png"  />
+  <img height="200" src="https://i.ibb.co/ryXzKD0/example.png"  />
 </div>
 
 ###
