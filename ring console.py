@@ -13,6 +13,7 @@ mountain_mask_url = "https://i.ibb.co/NCQcsjQ/BM-M.png"
 #mountian mask map images below:
 # Broken Moon:  "https://i.ibb.co/NCQcsjQ/BM-M.png"  
 # Worlds Edge: "https://i.ibb.co/7JgyZVY/WE-M.png"
+# Storm Point: "https://i.ibb.co/YX5nmft/SP-M.png"
 
 # Intents for the bot
 intents = discord.Intents.default()
