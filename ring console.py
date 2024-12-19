@@ -5,6 +5,7 @@ import requests
 from io import BytesIO
 import psutil
 import asyncio
+import gc
 
 # Discord bot token
 TOKEN = "--"  # Replace with your bot's token
@@ -183,9 +184,18 @@ async def on_reaction_add(reaction, user):
                 file=discord.File(output_image_bytes, "new_prediction.png")
             )
 
+async def clear_memory():
+    """
+    Clears memory-heavy variables to free up space and triggers garbage collection.
+    """
+    global previous_predictions
+    previous_predictions.clear()
+    gc.collect()  # Force garbage collection
+    print("Memory cleared and garbage collected to free up space.")
+
 async def update_status():
     """
-    Periodically updates the bot's status based on RAM usage every 15 seconds.
+    Periodically updates the bot's status based on RAM usage and clears memory if needed.
     """
     while True:
         ram_usage = psutil.Process().memory_info().rss / (1024 ** 2)  # RAM usage in MB
@@ -193,10 +203,11 @@ async def update_status():
             emoji = "🟢"  # Green
         elif ram_usage < 750:
             emoji = "🟡"  # Yellow
-        elif ram_usage < 1000:
+        elif ram_usage < 800:
             emoji = "🟠"  # Orange
         else:
             emoji = "🔴"  # Red
+            await clear_memory()  # Clear memory if usage exceeds 800MB
 
         await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"{emoji} {ram_usage:.1f} MB used"))
         await asyncio.sleep(15)
