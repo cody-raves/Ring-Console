@@ -3,15 +3,17 @@ import cv2
 import numpy as np
 import requests
 from io import BytesIO
+import psutil
+import asyncio
 
 # Discord bot token
 TOKEN = "--"  # Replace with your bot's token
 
 # Define the mask URLs
 map_mask_url = "https://i.ibb.co/0n1QfDg/mapmask.png"
-mountain_mask_url = "https://i.ibb.co/NCQcsjQ/BM-M.png"  
-#mountian mask map images below:
-# Broken Moon:  "https://i.ibb.co/NCQcsjQ/BM-M.png"  
+mountain_mask_url = "https://i.ibb.co/YX5nmft/SP-M.png"
+# Mountain mask map images below:
+# Broken Moon:  "https://i.ibb.co/NCQcsjQ/BM-M.png"
 # Worlds Edge: "https://i.ibb.co/7JgyZVY/WE-M.png"
 # Storm Point: "https://i.ibb.co/YX5nmft/SP-M.png"
 
@@ -29,12 +31,32 @@ previous_predictions = set()
 @client.event
 async def on_ready():
     print(f"We have logged in as {client.user}")
+    client.loop.create_task(update_status())  # Start the status update loop
+
+def is_valid_ring3(x_ring3, y_ring3, r_ring3, x_ring2, y_ring2, r_ring2, mountain_mask):
+    """
+    Validates if the generated Ring 3 is playable:
+    - At least 50% of its area must be in a playable zone.
+    - Ring 3 must be entirely within the bounds of Ring 2.
+    """
+    # Ensure Ring 3 is entirely within Ring 2
+    distance_to_ring2_center = np.linalg.norm([x_ring3 - x_ring2, y_ring3 - y_ring2])
+    if distance_to_ring2_center + r_ring3 > r_ring2:
+        return False
+
+    # Check playable area using the mountain mask
+    mask = np.zeros(mountain_mask.shape[:2], dtype=np.uint8)
+    cv2.circle(mask, (x_ring3, y_ring3), r_ring3, 255, -1)
+    total_area = np.sum(mask > 0)
+    unplayable_area = np.sum((mask > 0) & (mountain_mask[:, :, 0] > 0))
+
+    playable_ratio = (total_area - unplayable_area) / total_area
+    return playable_ratio >= 0.5
 
 async def generate_prediction(screenshot, map_mask, mountain_mask):
     """
     Generate a valid Ring 3 prediction with correct scaling and constraints.
     """
-    # Ensure masks and screenshot are the same size
     if screenshot.shape[:2] != map_mask.shape[:2]:
         map_mask = cv2.resize(map_mask, (screenshot.shape[1], screenshot.shape[0]))
     if screenshot.shape[:2] != mountain_mask.shape[:2]:
@@ -74,21 +96,29 @@ async def generate_prediction(screenshot, map_mask, mountain_mask):
 
         # Predict Ring 3 location
         for _ in range(100):  # Retry up to 100 times
-            offset_x = np.random.randint(-r_ring2 // 2, r_ring2 // 2)
-            offset_y = np.random.randint(-r_ring2 // 2, r_ring2 // 2)
+            offset_angle = np.random.uniform(0, 2 * np.pi)
+            max_offset = r_ring2 - r_ring3
+            offset_distance = np.random.uniform(0, max_offset)
+            offset_x = int(offset_distance * np.cos(offset_angle))
+            offset_y = int(offset_distance * np.sin(offset_angle))
             x_ring3 = x_ring2 + offset_x
             y_ring3 = y_ring2 + offset_y
 
-            # Ensure Ring 3 is valid
-            distance_to_ring2 = np.linalg.norm([x_ring3 - x_ring2, y_ring3 - y_ring2])
-            if distance_to_ring2 + r_ring3 <= r_ring2 and (x_ring3, y_ring3) not in previous_predictions:
+            if is_valid_ring3(x_ring3, y_ring3, r_ring3, x_ring2, y_ring2, r_ring2, mountain_mask):
                 previous_predictions.add((x_ring3, y_ring3))
                 break
 
-        # Draw detected rings and prediction
-        cv2.circle(output_image, (x_ring1, y_ring1), r_ring1, (0, 255, 0), 2)  # Green: Ring 1
-        cv2.circle(output_image, (x_ring2, y_ring2), r_ring2, (255, 0, 0), 2)  # Blue: Ring 2
-        cv2.circle(output_image, (x_ring3, y_ring3), r_ring3, (0, 0, 255), 2)  # Red: Ring 3
+        # Create an overlay for the circles
+        overlay = output_image.copy()
+        circle_opacity = 0.4  # Adjust the opacity here (0 is fully transparent, 1 is fully opaque)
+
+        # Draw filled circles with opacity
+        cv2.circle(overlay, (x_ring1, y_ring1), r_ring1, (0, 255, 0), -1)  # Green: Ring 1
+        cv2.circle(overlay, (x_ring2, y_ring2), r_ring2, (255, 0, 0), -1)  # Blue: Ring 2
+        cv2.circle(overlay, (x_ring3, y_ring3), r_ring3, (0, 0, 255), -1)  # Red: Ring 3
+
+        # Blend the overlay onto the output image
+        cv2.addWeighted(overlay, circle_opacity, output_image, 1 - circle_opacity, 0, output_image)
 
         # Save to buffer
         _, buffer = cv2.imencode(".png", output_image)
@@ -115,12 +145,9 @@ async def on_message(message):
 
             # Download masks
             map_mask_response = requests.get(map_mask_url)
-            map_mask_array = np.frombuffer(map_mask_response.content, np.uint8)
-            map_mask = cv2.imdecode(map_mask_array, cv2.IMREAD_UNCHANGED)
-
+            map_mask = cv2.imdecode(np.frombuffer(map_mask_response.content, np.uint8), cv2.IMREAD_UNCHANGED)
             mountain_mask_response = requests.get(mountain_mask_url)
-            mountain_mask_array = np.frombuffer(mountain_mask_response.content, np.uint8)
-            mountain_mask = cv2.imdecode(mountain_mask_array, cv2.IMREAD_UNCHANGED)
+            mountain_mask = cv2.imdecode(np.frombuffer(mountain_mask_response.content, np.uint8), cv2.IMREAD_UNCHANGED)
 
             # Generate prediction
             output_image_bytes, ring3_coords = await generate_prediction(screenshot, map_mask, mountain_mask)
@@ -129,8 +156,6 @@ async def on_message(message):
                     "Prediction complete. React with 🔄 to retry.",
                     file=discord.File(output_image_bytes, "prediction.png")
                 )
-
-                # Add reaction for retry
                 await sent_message.add_reaction("🔄")
 
                 # Store data for retry
@@ -149,7 +174,6 @@ async def on_reaction_add(reaction, user):
         return
 
     if reaction.emoji == "🔄" and hasattr(client, "screenshot"):
-        # Retry with a new prediction
         output_image_bytes, _ = await generate_prediction(
             client.screenshot, client.map_mask, client.mountain_mask
         )
@@ -158,6 +182,24 @@ async def on_reaction_add(reaction, user):
                 "New prediction:",
                 file=discord.File(output_image_bytes, "new_prediction.png")
             )
+
+async def update_status():
+    """
+    Periodically updates the bot's status based on RAM usage every 15 seconds.
+    """
+    while True:
+        ram_usage = psutil.Process().memory_info().rss / (1024 ** 2)  # RAM usage in MB
+        if ram_usage < 500:
+            emoji = "🟢"  # Green
+        elif ram_usage < 750:
+            emoji = "🟡"  # Yellow
+        elif ram_usage < 1000:
+            emoji = "🟠"  # Orange
+        else:
+            emoji = "🔴"  # Red
+
+        await client.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"{emoji} {ram_usage:.1f} MB used"))
+        await asyncio.sleep(15)
 
 # Run the bot
 client.run(TOKEN)
