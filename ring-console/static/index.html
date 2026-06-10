@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ring Console</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="tool-panel">
+        <header class="brand">
+          <div class="brand-mark">RC</div>
+          <div>
+            <h1>Ring Console</h1>
+            <p>Apex zone predictor</p>
+          </div>
+        </header>
+
+        <label class="drop-zone" id="dropZone">
+          <input id="fileInput" type="file" accept="image/*">
+          <span class="drop-title">Paste or drop screenshot</span>
+          <span class="drop-subtitle" id="fileName">No image loaded</span>
+        </label>
+
+        <div class="control-grid">
+          <label>
+            <span>Map mask</span>
+            <select id="mapId">
+              <option value="mp_rr_olympus_mu3" selected>Olympus</option>
+              <option value="mp_rr_canyonlands_hu">Kings Canyon</option>
+              <option value="mp_rr_tropic_island_mu2">Storm Point</option>
+              <option value="none">No invalid-zone mask</option>
+            </select>
+          </label>
+
+          <label class="control-check">
+            <input id="showInvalidMask" type="checkbox">
+            <span>Show invalid zones</span>
+          </label>
+
+          <label>
+            <span>Visible rings</span>
+            <select id="firstRing">
+              <option value="1" selected>Ring 1 + Ring 2</option>
+              <option value="2">Ring 2 + Ring 3</option>
+              <option value="3">Ring 3 + Ring 4</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="step-actions">
+          <button class="step-button" id="cropButton" type="button" disabled>1 Crop Map</button>
+          <button class="step-button" id="detectButton" type="button" disabled>2 Detect</button>
+          <button class="step-button" id="predictButton" type="button" disabled>3 Predict</button>
+        </div>
+
+        <div class="status-box" id="statusBox">Waiting for screenshot.</div>
+
+        <section class="metrics">
+          <h2>Crop</h2>
+          <div id="cropInfo" class="metric-list"></div>
+          <h2>Detected</h2>
+          <div id="ringList" class="metric-list"></div>
+          <h2>Predicted</h2>
+          <div id="predictionList" class="metric-list"></div>
+          <h2>Candidates</h2>
+          <div id="candidateList" class="metric-list"></div>
+        </section>
+      </section>
+
+      <section class="result-panel">
+        <div class="image-stage" id="imageStage">
+          <div class="empty-state" id="emptyState">Screenshot preview</div>
+          <img id="previewImage" alt="Input screenshot">
+          <img id="resultImage" alt="Ring prediction result">
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/app.js?v=7"></script>
+  </body>
+</html>
